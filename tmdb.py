@@ -1,8 +1,9 @@
 import gzip
-import requests
 import json
 import os
 import time
+
+import requests
 from requests.exceptions import ConnectionError
 
 # you'll need to have an API key for TMDB
@@ -15,10 +16,11 @@ tmdb_api_key = os.environ["TMDB_API_KEY"]
 #  https://www.themoviedb.org/documentation/api
 # then in shell do export TMDB_API_KEY=<Your Key>
 tmdb_api = requests.Session()
-tmdb_api.params={'api_key': tmdb_api_key}
+tmdb_api.params = {"api_key": tmdb_api_key}
 
-TMDB_SLEEP_TIME_SECS=1
-CHUNK_SIZE=1000
+TMDB_SLEEP_TIME_SECS = 1
+CHUNK_SIZE = 1000
+
 
 class TaintedDataException(RuntimeError):
     pass
@@ -26,18 +28,23 @@ class TaintedDataException(RuntimeError):
 
 def getCastAndCrew(movieId, movie):
     httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s/credits" % movieId)
-    credits = json.loads(httpResp.text) #C
+    credits = json.loads(httpResp.text)  # C
     try:
-        crew = credits['crew']
+        crew = credits["crew"]
         directors = []
-        for crewMember in crew: #D
-            if crewMember['job'] == 'Director':
+        for crewMember in crew:  # D
+            if (
+                crewMember["job"] == "Director"
+                or crewMember["job"] == "Director of Photography"
+                or crewMember["job"] == "Writer"
+            ):
                 directors.append(crewMember)
     except KeyError as e:
         print(e)
         print(credits)
-    movie['cast'] = credits['cast']
-    movie['directors'] = directors
+    movie["cast"] = credits["cast"]
+    movie["directors"] = directors
+
 
 def extract(startChunk=0, movieIds=[], chunkSize=5000, existing_movies={}):
     movieDict = {}
@@ -53,9 +60,11 @@ def extract(startChunk=0, movieIds=[], chunkSize=5000, existing_movies={}):
         if str(movieId) in existing_movies:
             movieDict[str(movieId)] = existing_movies[str(movieId)]
             local += 1
-        else: # Go to the API
+        else:  # Go to the API
             try:
-                httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s" % movieId)
+                httpResp = tmdb_api.get(
+                    "https://api.themoviedb.org/3/movie/%s" % movieId
+                )
                 if httpResp.status_code == 429:
                     print(httpResp.text)
                     raise TaintedDataException
@@ -71,7 +80,7 @@ def extract(startChunk=0, movieIds=[], chunkSize=5000, existing_movies={}):
             except ConnectionError as e:
                 print(e)
 
-        if (movieId % chunkSize == (chunkSize - 1)):
+        if movieId % chunkSize == (chunkSize - 1):
             print("DONE CHUNK, LAST ID CHECKED %s" % movieId)
             yield movieDict
             movieDict = {}
@@ -81,30 +90,33 @@ def extract(startChunk=0, movieIds=[], chunkSize=5000, existing_movies={}):
     yield movieDict
 
 
-def lastMovieId(url='https://api.themoviedb.org/3/movie/latest'):
+def lastMovieId(url="https://api.themoviedb.org/3/movie/latest"):
     try:
         print("GET ID")
         httpResp = tmdb_api.get(url)
     except Exception as e:
         print(e)
     jsonResponse = json.loads(httpResp.text)
-    print("Latest movie is %s (%s)" % (jsonResponse['id'], jsonResponse['title']))
-    return int(jsonResponse['id'])
+    print("Latest movie is %s (%s)" % (jsonResponse["id"], jsonResponse["title"]))
+    return int(jsonResponse["id"])
+
 
 def read_chunk(chunk_id):
-    with gzip.GzipFile('chunks/tmdb.%s.json.gz' % chunk_id) as f:
-        return json.loads(f.read().decode('utf-8'))
+    with gzip.GzipFile("chunks/tmdb.%s.json.gz" % chunk_id) as f:
+        return json.loads(f.read().decode("utf-8"))
+
 
 def write_chunk(chunk_id, movie_dict):
-    with gzip.GzipFile('chunks/tmdb.%s.json.gz' % chunk_id, 'w') as f:
-        f.write(json.dumps(movie_dict).encode('utf-8'))
+    with gzip.GzipFile("chunks/tmdb.%s.json.gz" % chunk_id, "w") as f:
+        f.write(json.dumps(movie_dict).encode("utf-8"))
+
 
 def continueChunks(lastId):
     allTmdb = {}
     existing_movies = {}
     atChunk = 0
     try:
-        with open('tmdb.json') as f:
+        with open("tmdb.json") as f:
             print("Using Existing tmdb.json")
             existing_movies = json.load(f)
     except FileNotFoundError:
@@ -114,12 +126,18 @@ def continueChunks(lastId):
             movies = read_chunk(i)
             allTmdb = {**movies, **allTmdb}
         except IOError:
-            print("Starting at chunk %s; total %s" % (i, int(lastId/CHUNK_SIZE)))
+            print("Starting at chunk %s; total %s" % (i, int(lastId / CHUNK_SIZE)))
             atChunk = i
             break
 
-    for idx, movieDict in enumerate(extract(startChunk=atChunk, existing_movies=existing_movies,
-                                            chunkSize=CHUNK_SIZE, movieIds=range(lastId))):
+    for idx, movieDict in enumerate(
+        extract(
+            startChunk=atChunk,
+            existing_movies=existing_movies,
+            chunkSize=CHUNK_SIZE,
+            movieIds=range(lastId),
+        )
+    ):
         currChunk = idx + atChunk
         write_chunk(currChunk, movieDict)
     return True
@@ -132,13 +150,13 @@ def ensure_dir(file_path):
 
 
 if __name__ == "__main__":
-    ensure_dir('chunks/')
+    ensure_dir("chunks/")
     lastId = lastMovieId()
     while True:
         try:
-            if (continueChunks(lastId=lastId)):
+            if continueChunks(lastId=lastId):
                 print("YOU HAVE WON THE GAME!")
         except TaintedDataException:
             print("Chunk tainted, trying again")
-            time.sleep(TMDB_SLEEP_TIME_SECS*2)
+            time.sleep(TMDB_SLEEP_TIME_SECS * 2)
             continue
