@@ -27,18 +27,19 @@ class TaintedDataException(RuntimeError):
 
 
 def getCastAndCrew(movieId, movie):
-    httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s/credits" % movieId)
+    httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s/credits" % movieId, timeout=10, retries=5)
     credits = json.loads(httpResp.text)  # C
     try:
-        crew = credits["crew"]
-        directors = []
-        for crewMember in crew:  # D
-            if (
-                crewMember["job"] == "Director"
-                or crewMember["job"] == "Director of Photography"
-                or crewMember["job"] == "Writer"
-            ):
-                directors.append(crewMember)
+        if "crew" in credits:
+            crew = credits["crew"]
+            directors = []
+            for crewMember in crew:  # D
+                if (
+                    crewMember["job"] == "Director"
+                    or crewMember["job"] == "Director of Photography"
+                    or crewMember["job"] == "Writer"
+                ):
+                    directors.append(crewMember)
     except KeyError as e:
         print(e)
         print(credits)
@@ -62,9 +63,8 @@ def extract(startChunk=0, movieIds=[], chunkSize=5000, existing_movies={}):
             local += 1
         else:  # Go to the API
             try:
-                httpResp = tmdb_api.get(
-                    "https://api.themoviedb.org/3/movie/%s" % movieId
-                )
+                t0 = time.time()
+                httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s" % movieId,timeout=10, retries=5)
                 if httpResp.status_code == 429:
                     print(httpResp.text)
                     raise TaintedDataException
@@ -156,6 +156,7 @@ if __name__ == "__main__":
         try:
             if continueChunks(lastId=lastId):
                 print("YOU HAVE WON THE GAME!")
+                exit(0)
         except TaintedDataException:
             print("Chunk tainted, trying again")
             time.sleep(TMDB_SLEEP_TIME_SECS * 2)
