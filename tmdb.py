@@ -27,7 +27,7 @@ class TaintedDataException(RuntimeError):
 
 
 def getCastAndCrew(movieId, movie):
-    httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s/credits" % movieId, timeout=10, retries=5)
+    httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s/credits" % movieId, timeout=10)
     credits = json.loads(httpResp.text)  # C
     try:
         if "crew" in credits:
@@ -40,9 +40,10 @@ def getCastAndCrew(movieId, movie):
                     or crewMember["job"] == "Writer"
                 ):
                     directors.append(crewMember)
-    except KeyError as e:
+    except Exception as e:
         print(e)
         print(credits)
+
     movie["cast"] = credits["cast"]
     movie["directors"] = directors
 
@@ -64,7 +65,7 @@ def extract(startChunk=0, movieIds=[], chunkSize=5000, existing_movies={}):
         else:  # Go to the API
             try:
                 t0 = time.time()
-                httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s" % movieId,timeout=10, retries=5)
+                httpResp = tmdb_api.get("https://api.themoviedb.org/3/movie/%s" % movieId, timeout=10)
                 if httpResp.status_code == 429:
                     print(httpResp.text)
                     raise TaintedDataException
@@ -77,7 +78,7 @@ def extract(startChunk=0, movieIds=[], chunkSize=5000, existing_movies={}):
                     missing += 1
                 else:
                     print("Error %s for %s" % (httpResp.status_code, movieId))
-            except ConnectionError as e:
+            except Exception as e:
                 print(e)
 
         if movieId % chunkSize == (chunkSize - 1):
