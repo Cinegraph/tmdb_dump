@@ -102,3 +102,6 @@ ENV/
 # mypy
 .mypy_cache/
 tmdb_dump_2021-10-22.json
+tmdb_dump_*
+
+.DS_Store
