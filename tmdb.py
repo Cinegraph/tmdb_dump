@@ -19,7 +19,7 @@ tmdb_api = requests.Session()
 tmdb_api.params = {"api_key": tmdb_api_key}
 
 TMDB_SLEEP_TIME_SECS = 1
-CHUNK_SIZE = 1000
+CHUNK_SIZE = 10
 
 
 class TaintedDataException(RuntimeError):
